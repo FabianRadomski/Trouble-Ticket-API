@@ -20,6 +20,7 @@ import java.time.ZoneOffset;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
@@ -71,7 +72,7 @@ class CreateTroubleTicketTest {
         // insert commits, first acknowledge conflicts, retry commits
         doNothing().doThrow(CONFLICT).doNothing().when(txManager).commit(any());
 
-        TroubleTicket ticket = createTroubleTicket.create(TENANT, COMMAND);
+        TroubleTicket ticket = createTroubleTicket.create(TENANT, COMMAND).ticket();
 
         assertThat(ticket.status()).isEqualTo(TicketStatus.ACKNOWLEDGED);
         verify(repository, times(2)).findByIdAndTenantId("TT-2026-000001", TENANT);
@@ -81,7 +82,7 @@ class CreateTroubleTicketTest {
     void ticketIsReturnedAsCreatedWhenTheRetryConflictsToo() {
         doNothing().doThrow(CONFLICT).when(txManager).commit(any());
 
-        TroubleTicket ticket = createTroubleTicket.create(TENANT, COMMAND);
+        TroubleTicket ticket = createTroubleTicket.create(TENANT, COMMAND).ticket();
 
         assertThat(ticket.status()).isEqualTo(TicketStatus.NEW);
         assertThat(ticket.notes()).hasSize(1);
@@ -95,6 +96,62 @@ class CreateTroubleTicketTest {
         assertThatThrownBy(() -> createTroubleTicket.create(TENANT, COMMAND))
                 .isInstanceOf(ServiceNotFoundException.class);
         verify(repository, never()).save(any());
+        verify(soz, never()).register(any());
+    }
+
+    // --- idempotency (README §4) -----------------------------------------------------------
+
+    @Test
+    void existingTicketIsReturnedWithoutCheckingTheServiceOrStoringAnything() {
+        TroubleTicket existing = storedTicket();
+        existing.acknowledge(NOW);
+        when(repository.findByTenantIdAndExternalId(TENANT, "EXT-1")).thenReturn(Optional.of(existing));
+        var differentPayload = new CreateTroubleTicket.Command("EXT-1", 2, "Other", "other note");
+
+        var result = createTroubleTicket.create(TENANT, differentPayload);
+
+        assertThat(result.created()).isFalse();
+        assertThat(result.ticket()).isSameAs(existing);
+        verify(catalog, never()).findActiveForTenant(anyString(), anyLong());
+        verify(repository, never()).save(any());
+        verify(soz, never()).register(any());
+    }
+
+    @Test
+    void repeatedCreateOfATicketStillNewRetriesTheSozRegistration() {
+        when(repository.findByTenantIdAndExternalId(TENANT, "EXT-1")).thenReturn(Optional.of(storedTicket()));
+
+        var result = createTroubleTicket.create(TENANT, COMMAND);
+
+        assertThat(result.created()).isFalse();
+        assertThat(result.ticket().status()).isEqualTo(TicketStatus.ACKNOWLEDGED);
+        verify(soz).register(any());
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void losingAConcurrentCreateReturnsTheWinnersTicket() {
+        TroubleTicket winner = storedTicket();
+        when(repository.findByTenantIdAndExternalId(TENANT, "EXT-1"))
+                .thenReturn(Optional.empty())       // before the insert: not there yet
+                .thenReturn(Optional.of(winner));   // after the unique violation
+        doThrow(new DataIntegrityViolationException("uq_trouble_ticket_tenant_external")).when(txManager)
+                .commit(any());
+
+        var result = createTroubleTicket.create(TENANT, COMMAND);
+
+        assertThat(result.created()).isFalse();
+        assertThat(result.ticket()).isSameAs(winner);
+        // The winning request registers the ticket with SOZ; the loser must not do it again.
+        verify(soz, never()).register(any());
+    }
+
+    @Test
+    void otherIntegrityViolationsPropagate() {
+        var violation = new DataIntegrityViolationException("something else");
+        doThrow(violation).when(txManager).commit(any());
+
+        assertThatThrownBy(() -> createTroubleTicket.create(TENANT, COMMAND)).isSameAs(violation);
         verify(soz, never()).register(any());
     }
 

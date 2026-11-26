@@ -138,8 +138,9 @@ a service inventory) behind a port:
   resends it. SOZ registration must be idempotent, keyed by our ticket `id`.
 - **v1 limitation:** if SOZ is down, the ticket stays `new` and nothing retries it. Accepted for the
   assignment's scope and listed as a known gap.
-- Optional v1 mitigation: on an idempotent re-create (`200`, same `tenantId + externalId`), retry
-  SOZ registration if the stored status is still `new`.
+- v1 mitigation: an idempotent re-create (`200`, same `tenantId + externalId`) retries the SOZ
+  registration if the stored status is still `new` (§4). A client retrying after a lost response
+  thereby also retries the registration.
 - *Rejected:* calling SOZ inside the DB transaction. Slow DB connections are held during an
   external call, a SOZ outage blocks all creates, and a timeout after SOZ accepted leaves SOZ with
   a ticket we rolled back.
@@ -151,13 +152,23 @@ a service inventory) behind a port:
 - The key is `(tenant_id, external_id)`, enforced by a **unique constraint** in PostgreSQL.
 - If a ticket with that key exists, the API returns **`200 OK` with the existing ticket**, as the spec says,
   **even if the new payload differs** (`serviceId`, `description`, `note`). The differing payload
-  is ignored and a warning is logged.
+  is ignored and a warning is logged. The warning names the differing fields only, not their values
+  (customer data).
   - *Rejected:* `409` on mismatch (not in the contract) and `400` on mismatch (the request is valid, so
     400 is semantically wrong).
   - Risk: a client that reuses an `externalId` by mistake silently gets the old ticket back.
 - **Concurrent duplicates:** two simultaneous creates both pass the "exists?" check, and one insert fails
   on the unique constraint. The violation is caught, the winning row is re-read and returned as `200`.
   No application-level locking is needed.
+  - The insert runs in its own transaction, so the violation is caught after that transaction has rolled
+    back, and the re-read uses a fresh one. Under PostgreSQL's read-committed isolation the losing insert
+    waits on the unique index until the winner commits, so the re-read always finds the winning row.
+  - Any integrity violation triggers the re-read; if no ticket with the key exists, the original error is
+    rethrown (`500`). This avoids parsing driver-specific constraint names.
+  - The loser does **not** call SOZ: the winning request is registering the ticket at that moment.
+  - Hibernate logs each such violation at `WARN`. It is expected only under concurrent duplicates.
+- A replay of a ticket still `new` retries its SOZ registration (§3); the response is `200` with the
+  resulting status.
 - The `Location` header is returned on both `201` and `200`, as the spec declares. Its value is the
   **relative** path `/api/v1/troubleTicket/{id}` (the spec types it as `uri-reference`, so a relative
   reference is valid). This avoids rebuilding the external host/scheme behind proxies.
@@ -194,6 +205,8 @@ Identifiers follow the format of the spec examples and come from PostgreSQL sequ
   The sequence is global and is **not** reset each year, which keeps it simple and unique without per-year counters.
 - Note: `NOTE-{6-digit sequence}`, e.g. `NOTE-000001`.
 - The padding is a minimum width. Past 999999 the number just grows.
+- Numbers can have gaps: a create that loses an idempotency race (§4) or fails has already taken its
+  sequence values. IDs are unique and increasing, not contiguous.
 - Trade-off: sequential IDs can be enumerated. That is harmless here because every lookup is tenant-scoped
   and returns `404` for tickets of other tenants. *Rejected:* UUIDs (opaque, but inconsistent with the
   contract's examples).

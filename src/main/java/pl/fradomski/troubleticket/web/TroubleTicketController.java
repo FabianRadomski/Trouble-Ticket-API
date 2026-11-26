@@ -35,8 +35,12 @@ class TroubleTicketController implements TroubleTicketApi {
 
     @Override
     public ResponseEntity<TroubleTicket> createTroubleTicket(TroubleTicketCreateRequest request) {
-        var ticket = createTroubleTicket.create(currentTenant.id(), TroubleTicketMapper.toCommand(request));
-        return ResponseEntity.created(location(ticket.id())).body(TroubleTicketMapper.toDto(ticket));
+        var result = createTroubleTicket.create(currentTenant.id(), TroubleTicketMapper.toCommand(request));
+        var ticket = result.ticket();
+        // 201 for a new ticket, 200 for an existing one with the same externalId (README §4).
+        return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK)
+                .location(location(ticket.id()))
+                .body(TroubleTicketMapper.toDto(ticket));
     }
 
     @Override
