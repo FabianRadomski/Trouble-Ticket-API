@@ -25,3 +25,8 @@ management:
     health:
       probes:
         enabled: true
+
+logging:
+  pattern:
+    # Request ID from RequestIdFilter (README §9) on every log line.
+    correlation: "[%X{requestId:-}] "
