@@ -59,7 +59,7 @@ a service inventory) behind a port:
   including an inactive one) for local runs and tests.
 - Unknown, inactive **or belonging to another tenant** all return the same
   `404 SERVICE_NOT_FOUND`, so the API does not reveal whether a service exists in another tenant.
-- *Rejected:* a `service` table seeded by Flyway. Simpler to query, but it suggests this service owns
+- *Rejected:* a local `service` table with seed data. Simpler to query, but it suggests this service owns
   service data, which it does not.
 
 ### 3. SOZ integration and the `acknowledged` status
@@ -117,9 +117,11 @@ a service inventory) behind a port:
 - **Concurrent duplicates:** two simultaneous creates both pass the "exists?" check, and one insert fails
   on the unique constraint. The violation is caught, the winning row is re-read and returned as `200`.
   No application-level locking is needed.
-- The `Location` header is returned on both `201` and `200`, as the spec declares.
-- The `serviceId` check runs before the idempotency check only for new tickets. A replay of an
-  existing ticket returns `200` even if the service has since been deactivated.
+- The `Location` header is returned on both `201` and `200`, as the spec declares. Its value is the
+  **relative** path `/api/v1/troubleTicket/{id}` (the spec types it as `uri-reference`, so a relative
+  reference is valid). This avoids rebuilding the external host/scheme behind proxies.
+- The idempotency lookup runs **first**. The `serviceId` check applies only when a new ticket is
+  created, so a replay of an existing ticket returns `200` even if the service has since been deactivated.
 
 ### 5. Status lifecycle and closing
 
@@ -161,6 +163,10 @@ Identifiers follow the format of the spec examples and come from PostgreSQL sequ
 - `additionalProperties: false` is enforced: unknown JSON fields → `400 VALIDATION_ERROR`
   (Jackson `FAIL_ON_UNKNOWN_PROPERTIES`). Bean Validation enforces required fields, `minLength`
   and `minimum`.
+- **Whitespace-only strings are rejected** (`"   "` → `400 VALIDATION_ERROR`) for `externalId`,
+  `description`, `note` and note `text`. This is **stricter than the contract**: `minLength: 1` alone
+  accepts them, but a blank description, note or external key carries no meaning and would only
+  pollute data. Values are otherwise stored as sent (not trimmed).
 - Error codes:
 
 | HTTP | `code`                     | When                                                        |
@@ -171,6 +177,16 @@ Identifiers follow the format of the spec examples and come from PostgreSQL sequ
 | 404  | `SERVICE_NOT_FOUND`        | create: service unknown, inactive or in another tenant      |
 | 404  | `TROUBLE_TICKET_NOT_FOUND` | ticket unknown or in another tenant                         |
 | 500  | `INTERNAL_ERROR`           | unexpected error (not in the spec; no internals leaked)     |
+
+Generic HTTP errors the spec does not list still use the same `Error` body, so clients only ever
+have to parse one error shape:
+
+| HTTP | `code`                     | When                                                        |
+|------|----------------------------|-------------------------------------------------------------|
+| 404  | `NOT_FOUND`                | unknown path                                                |
+| 405  | `METHOD_NOT_ALLOWED`       | HTTP method not supported on the path                       |
+| 406  | `NOT_ACCEPTABLE`           | `Accept` header excludes `application/json`                 |
+| 415  | `UNSUPPORTED_MEDIA_TYPE`   | request body is not `application/json`                      |
 
 ### 9. Request ID
 
@@ -190,7 +206,22 @@ Identifiers follow the format of the spec examples and come from PostgreSQL sequ
   `status`. A server-side cap was rejected because it would silently truncate results
   without any signal in the contract.
 
-### 11. Other notes
+### 11. Contract-first code generation
+
+- The Spring controller interfaces (`TroubleTicketApi`, `TroubleTicketNoteApi`) and the request/response
+  DTOs are **generated from `devtask/trouble-ticket-api.yaml`** by `openapi-generator` on every build
+  (into `build/`, not committed). Controllers implement the generated interfaces, so if the code
+  drifts from the spec (path, method, parameter, field), **the build fails**.
+- The generator does not apply the spec's `/api/v{version}` server URL. The `/api/v1` prefix is added
+  in the web configuration for the generated controllers only (actuator stays at `/actuator`).
+- Generated DTOs are a **web-layer concern only**. They are mapped to and from domain objects in the
+  web layer and never reach the application or domain code.
+- The generator cannot check everything (e.g. that a response actually fills every required field),
+  so integration tests additionally validate real responses against the spec where feasible.
+- *Rejected:* hand-written DTOs plus a contract test. That means more code to keep in sync by hand, and drift
+  is detected only by tests rather than by the compiler.
+
+### 12. Other notes
 
 - The assignment refers to `devtask/trouble-ticket-api.yaml`. The specification lives in `devtask/`
   accordingly.
