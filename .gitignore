@@ -1,0 +1,15 @@
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Local dev secrets (JWT keypair, minted tokens) - see README §1
+.dev/
+
+# OS
+.DS_Store
