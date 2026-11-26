@@ -14,7 +14,6 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
@@ -25,17 +24,19 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
-import pl.fradomski.troubleticket.TestcontainersConfiguration;
+import pl.fradomski.troubleticket.IntegrationTest;
+import pl.fradomski.troubleticket.TestJwt;
 import pl.fradomski.troubleticket.api.model.TroubleTicketCreateRequest;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Every error response has the spec's {@code Error} shape with the request ID (README §8, §9).
- * Test-only controllers trigger each exception type through real HTTP.
+ * Test-only controllers trigger each exception type through real HTTP. Requests carry a valid
+ * token, so security lets them through to MVC (security errors: {@code SecurityIT}).
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Import({TestcontainersConfiguration.class, ErrorHandlingIT.TestControllers.class})
+@IntegrationTest
+@Import(ErrorHandlingIT.TestControllers.class)
 class ErrorHandlingIT {
 
     private static final String VALID_BODY = """
@@ -156,6 +157,7 @@ class ErrorHandlingIT {
     }
 
     private HttpResponse<String> send(HttpRequest.Builder request) throws IOException, InterruptedException {
+        request.header("Authorization", "Bearer " + TestJwt.fullAccess());
         return http.send(request.build(), HttpResponse.BodyHandlers.ofString());
     }
 

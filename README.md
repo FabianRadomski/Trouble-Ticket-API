@@ -8,7 +8,18 @@ Stack: Java 21, Spring Boot, PostgreSQL, Docker Compose.
 
 ## Running
 
-> TODO: filled in once the implementation lands (docker compose, key generation, minting a dev token, example curl calls).
+> Full instructions (example calls for every endpoint) land with the implementation. So far:
+
+```bash
+scripts/dev-keys.sh                     # once: RS256 keypair into .dev/ (gitignored); needs openssl
+docker compose up --build               # api :8080, postgres :5432, swagger-ui :8081
+TOKEN=$(scripts/dev-token.sh tenant-a "tt:read tt:write")   # 1h dev token
+curl -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/troubleTicket
+./gradlew build                         # tests need Docker (Testcontainers)
+```
+
+`scripts/dev-keys.sh` must run before `docker compose up`: Compose mounts `.dev/jwt-public.pem`
+into the `api` container.
 
 ## Assumptions and technical decisions
 
@@ -43,8 +54,27 @@ checks JWTs locally.
 | `GET /troubleTicket`, `GET /troubleTicket/{id}` | `tt:read`  |
 | `POST /troubleTicket`, `PATCH /troubleTicket/{id}`, `POST /troubleTicket/{id}/note` | `tt:write` |
 
-- Missing, invalid or expired token, or a token **without `tenant_id`** → `401 UNAUTHORIZED`.
+`HEAD` on ticket paths needs `tt:read` like `GET`, since Spring MVC answers it from the `GET` handler.
+
+**Everything else:**
+
+| Path / request                          | Rule                                                        |
+|-----------------------------------------|-------------------------------------------------------------|
+| `/actuator/health/**`                   | public (container probes)                                   |
+| other `/actuator/**`                    | denied for every token, so an endpoint exposed later is not open by accident |
+| `/.well-known/oauth-protected-resource` | public; RFC 9728 metadata that Spring Security 7 serves by default, set to list the two scopes |
+| any other path or method                | any valid token, so MVC answers `404` / `405` instead of a misleading `403` |
+| internal error dispatches               | not checked again, so errors raised in filters keep their status |
+
+- Missing, invalid or expired token, or a token **without `tenant_id`** (or a blank or non-string one) → `401 UNAUTHORIZED`.
+  The `tenant_id` check is a token validator, so such a token never authenticates and application
+  code never sees a request without a tenant.
 - Valid token without the required scope → `403 FORBIDDEN`.
+- Authentication and scope checks run before the request body is read: a missing token with an invalid
+  body is `401`, not `400`.
+- The tenant reaches application code only through `CurrentTenant` (read from the verified token).
+- *Not configured:* CORS. Browser calls from another origin (e.g. Swagger UI "Try it out" on :8081)
+  are blocked; curl and server-to-server calls are not affected.
 - Spring Security does not produce the spec's error body by default, so a custom
   `AuthenticationEntryPoint` and `AccessDeniedHandler` render `{code, message, requestId}` for 401/403.
 

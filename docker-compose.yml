@@ -24,6 +24,10 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/troubleticket
       DB_USERNAME: troubleticket
       DB_PASSWORD: troubleticket
+      JWT_PUBLIC_KEY_LOCATION: file:/run/secrets/jwt-public.pem
+    volumes:
+      # Created by scripts/dev-keys.sh; run it before `docker compose up` (README "Running").
+      - ./.dev/jwt-public.pem:/run/secrets/jwt-public.pem:ro
     ports:
       - "8080:8080"
     healthcheck:

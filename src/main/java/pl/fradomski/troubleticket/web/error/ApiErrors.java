@@ -1,11 +1,14 @@
 package pl.fradomski.troubleticket.web.error;
 
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import pl.fradomski.troubleticket.api.model.Error;
 import pl.fradomski.troubleticket.web.RequestIdFilter;
+import tools.jackson.databind.json.JsonMapper;
 
 /** Builds the spec's {@code Error} body ({@code code, message, requestId}) for every error response. */
 public final class ApiErrors {
@@ -27,5 +30,15 @@ public final class ApiErrors {
         // header excludes it (e.g. the 406 response itself).
         out.setContentType(MediaType.APPLICATION_JSON);
         return new ResponseEntity<>(body(code, message), out, status);
+    }
+
+    /**
+     * For errors raised in servlet filters (e.g. Spring Security), outside Spring MVC. The status
+     * must already be set on the response.
+     */
+    public static void write(HttpServletResponse response, JsonMapper jsonMapper, ErrorCode code, String message)
+            throws IOException {
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        jsonMapper.writeValue(response.getOutputStream(), body(code, message));
     }
 }

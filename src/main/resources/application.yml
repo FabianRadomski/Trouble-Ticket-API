@@ -11,6 +11,13 @@ spring:
       # Hibernate never creates or changes the schema; how the schema is managed is decided
       # together with the first ticket slice.
       ddl-auto: none
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # RS256 public key only (README §1). Locally: scripts/dev-keys.sh writes .dev/jwt-public.pem.
+          public-key-location: ${JWT_PUBLIC_KEY_LOCATION:file:.dev/jwt-public.pem}
+          jws-algorithms: RS256
   jackson:
     deserialization:
       # Spec: additionalProperties: false -> unknown JSON fields are a 400 (README §8).
