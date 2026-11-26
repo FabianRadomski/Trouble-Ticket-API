@@ -9,6 +9,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 import pl.fradomski.troubleticket.IntegrationTest;
 import pl.fradomski.troubleticket.TestJwt;
 import pl.fradomski.troubleticket.api.model.TroubleTicketCreateRequest;
+import pl.fradomski.troubleticket.domain.TroubleTicket;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -112,6 +114,11 @@ class ErrorHandlingIT {
     }
 
     @Test
+    void domainValidationErrorIs400() throws Exception {
+        assertError(get("/test/blank-description"), 400, "VALIDATION_ERROR", "Field 'description' must not be blank");
+    }
+
+    @Test
     void unexpectedExceptionIs500WithoutInternals() throws Exception {
         var response = get("/test/boom");
         assertError(response, 500, "INTERNAL_ERROR", "Unexpected error. Quote the requestId when reporting it.");
@@ -185,6 +192,13 @@ class ErrorHandlingIT {
             @GetMapping(path = "/test/boom", produces = "application/json")
             Map<String, String> boom() {
                 throw new IllegalStateException("secret internals");
+            }
+
+            /** Whitespace-only passes the schema; the domain rejects it (README §8). */
+            @GetMapping(path = "/test/blank-description", produces = "application/json")
+            Map<String, String> blankDescription() {
+                new TroubleTicket("TT-2026-000001", "tenant-a", "EXT-1", 1, "   ", Instant.now());
+                return Map.of();
             }
         }
 

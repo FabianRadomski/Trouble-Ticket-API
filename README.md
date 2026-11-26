@@ -197,6 +197,13 @@ Identifiers follow the format of the spec examples and come from PostgreSQL sequ
   `description`, `note` and note `text`. This is **stricter than the contract**: `minLength: 1` alone
   accepts them, but a blank description, note or external key carries no meaning and would only
   pollute data. Values are otherwise stored as sent (not trimmed).
+- **`externalId` is limited to 255 characters** (longer → `400 VALIDATION_ERROR`). The spec sets no
+  `maxLength`, so this is also **stricter than the contract**. The value is part of the unique
+  idempotency index, and an unbounded key would fail inside PostgreSQL's index (a `500`) instead of
+  as a clear client error. 255 leaves ample room for UUIDs and typical ticket numbers of client systems.
+  *Rejected:* an unbounded `text` column (matches the contract literally, but very long keys break the index).
+- Whitespace and length rules live in the domain (`TroubleTicket`), which throws a validation exception
+  rendered as the same `400 VALIDATION_ERROR` body as schema violations.
 - Error codes:
 
 | HTTP | `code`                     | When                                                        |
@@ -251,7 +258,29 @@ have to parse one error shape:
 - *Rejected:* hand-written DTOs plus a contract test. That means more code to keep in sync by hand, and drift
   is detected only by tests rather than by the compiler.
 
-### 12. Other notes
+### 12. Persistence
+
+- **Schema: Flyway** migrations (`src/main/resources/db/migration`). Hibernate only validates the
+  entities against the schema at startup (`ddl-auto: validate`) and never changes it.
+  Versioned SQL is reviewable and gives full control over constraints, indexes and sequences.
+  *Rejected:* Hibernate `ddl-auto: update` (no history, unsafe in production), `schema.sql` at startup
+  (no versioning), Liquibase (equivalent, but more ceremony than plain SQL needs here).
+- **JPA entities with behaviour.** `TroubleTicket` and `Note` are JPA entities that also own the status
+  rules (`acknowledge()`, `close()`, `addNote()`), unit-tested without Spring. Generated DTOs stay in
+  the web layer. *Rejected:* separate domain objects plus persistence entities and a mapper: cleaner
+  separation, but twice the classes and mapping code for a model this small.
+- **Constraints in the database:** `unique (tenant_id, external_id)` backs idempotency (§4), a check
+  constraint limits `status` to known values, and notes reference their ticket by foreign key.
+- **Optimistic locking** (`version` column) on tickets, so concurrent status changes (e.g. a SOZ
+  acknowledge racing a client close) cannot silently overwrite each other.
+- **Tenant-scoped repository.** The ticket repository extends Spring Data's bare `Repository`, not
+  `JpaRepository`, and every lookup takes the tenant. There is no unscoped `findById` that could load
+  another tenant's ticket by mistake.
+- Times are stored as `timestamptz` (UTC `Instant` in code), truncated to microseconds, PostgreSQL's
+  precision. A single `Clock` bean supplies "now", so tests control time.
+- A ticket's `updatedAt` tracks the ticket's own fields (status); notes carry their own time.
+
+### 13. Other notes
 
 - The assignment refers to `devtask/trouble-ticket-api.yaml`. The specification lives in `devtask/`
   accordingly.

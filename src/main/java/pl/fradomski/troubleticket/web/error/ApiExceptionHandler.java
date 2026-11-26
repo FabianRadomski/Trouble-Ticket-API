@@ -24,6 +24,7 @@ import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import pl.fradomski.troubleticket.domain.DomainValidationException;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.exc.StreamReadException;
 import tools.jackson.databind.exc.UnrecognizedPropertyException;
@@ -62,6 +63,12 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             name = node.getName();
         }
         return name;
+    }
+
+    /** Input the schema accepts but the domain rejects, e.g. a whitespace-only description. */
+    @ExceptionHandler(DomainValidationException.class)
+    ResponseEntity<Object> handleDomainValidation(DomainValidationException ex) {
+        return ApiErrors.response(HttpStatus.BAD_REQUEST, ErrorCode.VALIDATION_ERROR, ex.getMessage(), null);
     }
 
     @ExceptionHandler(Exception.class)

@@ -8,9 +8,9 @@ spring:
   jpa:
     open-in-view: false
     hibernate:
-      # Hibernate never creates or changes the schema; how the schema is managed is decided
-      # together with the first ticket slice.
-      ddl-auto: none
+      # Flyway owns the schema (src/main/resources/db/migration); Hibernate only checks that the
+      # entities match it at startup.
+      ddl-auto: validate
   security:
     oauth2:
       resourceserver:
