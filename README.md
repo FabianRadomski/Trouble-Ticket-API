@@ -262,6 +262,11 @@ have to parse one error shape:
 
 - Returns all tickets in the caller's tenant, ordered **oldest first**
   (`ORDER BY created_at ASC, id ASC`). This order is deterministic and stays stable if paging is added later.
+- One query that reads only the four summary columns (a DTO projection, backed by the
+  `(tenant_id, created_at, id)` index). Notes are never loaded for the list, so there are no N+1 queries.
+- The spec's `TroubleTicketSummary` has **no `id`**, so a client cannot go from a list entry to
+  `GET /troubleTicket/{id}` directly. It can only match entries by its own `externalId`. The contract
+  is followed as written. Adding `id` to the summary would be a backward-compatible change for v2.
 - **Risk: no paging or filtering** (v1 contract). The response grows without limit as a tenant's ticket count
   grows. Proposed for v2: TMF-style `offset` / `limit` with `X-Total-Count`, plus filtering by
   `status`. A server-side cap was rejected because it would silently truncate results

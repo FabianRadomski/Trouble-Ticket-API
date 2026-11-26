@@ -13,6 +13,7 @@ import pl.fradomski.troubleticket.api.model.TroubleTicketCreateRequest;
 import pl.fradomski.troubleticket.api.model.TroubleTicketSummary;
 import pl.fradomski.troubleticket.application.CreateTroubleTicket;
 import pl.fradomski.troubleticket.application.GetTroubleTicket;
+import pl.fradomski.troubleticket.application.ListTroubleTickets;
 import pl.fradomski.troubleticket.web.security.CurrentTenant;
 
 /**
@@ -25,12 +26,14 @@ class TroubleTicketController implements TroubleTicketApi {
     private final CurrentTenant currentTenant;
     private final CreateTroubleTicket createTroubleTicket;
     private final GetTroubleTicket getTroubleTicket;
+    private final ListTroubleTickets listTroubleTickets;
 
     TroubleTicketController(CurrentTenant currentTenant, CreateTroubleTicket createTroubleTicket,
-            GetTroubleTicket getTroubleTicket) {
+            GetTroubleTicket getTroubleTicket, ListTroubleTickets listTroubleTickets) {
         this.currentTenant = currentTenant;
         this.createTroubleTicket = createTroubleTicket;
         this.getTroubleTicket = getTroubleTicket;
+        this.listTroubleTickets = listTroubleTickets;
     }
 
     @Override
@@ -50,7 +53,9 @@ class TroubleTicketController implements TroubleTicketApi {
 
     @Override
     public ResponseEntity<List<TroubleTicketSummary>> listTroubleTickets() {
-        throw new ResponseStatusException(HttpStatus.NOT_IMPLEMENTED); // next slice
+        return ResponseEntity.ok(listTroubleTickets.list(currentTenant.id()).stream()
+                .map(TroubleTicketMapper::toDto)
+                .toList());
     }
 
     @Override

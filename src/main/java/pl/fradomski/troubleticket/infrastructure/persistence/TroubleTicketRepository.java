@@ -1,8 +1,10 @@
 package pl.fradomski.troubleticket.infrastructure.persistence;
 
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.repository.Repository;
+import pl.fradomski.troubleticket.domain.TicketSummary;
 import pl.fradomski.troubleticket.domain.TroubleTicket;
 
 /**
@@ -20,4 +22,10 @@ public interface TroubleTicketRepository extends Repository<TroubleTicket, Strin
     /** Idempotency lookup of create (README §4). */
     @EntityGraph(attributePaths = "notes")
     Optional<TroubleTicket> findByTenantIdAndExternalId(String tenantId, String externalId);
+
+    /**
+     * The ticket list (README §10): a DTO projection, so it selects only the summary columns and
+     * never loads notes. {@code id} breaks ties between tickets created in the same microsecond.
+     */
+    List<TicketSummary> findAllByTenantIdOrderByCreatedAtAscIdAsc(String tenantId);
 }

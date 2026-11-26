@@ -5,8 +5,10 @@ import pl.fradomski.troubleticket.api.model.Note;
 import pl.fradomski.troubleticket.api.model.TroubleTicket;
 import pl.fradomski.troubleticket.api.model.TroubleTicketCreateRequest;
 import pl.fradomski.troubleticket.api.model.TroubleTicketStatus;
+import pl.fradomski.troubleticket.api.model.TroubleTicketSummary;
 import pl.fradomski.troubleticket.application.CreateTroubleTicket;
 import pl.fradomski.troubleticket.domain.TicketStatus;
+import pl.fradomski.troubleticket.domain.TicketSummary;
 
 /** Between the generated DTOs and the domain. DTOs never leave the web layer (README §11). */
 final class TroubleTicketMapper {
@@ -23,6 +25,11 @@ final class TroubleTicketMapper {
     static TroubleTicket toDto(pl.fradomski.troubleticket.domain.TroubleTicket ticket) {
         return new TroubleTicket(ticket.id(), ticket.externalId(), ticket.serviceId(), ticket.description(),
                 toDto(ticket.status()), ticket.notes().stream().map(TroubleTicketMapper::toDto).toList());
+    }
+
+    static TroubleTicketSummary toDto(TicketSummary summary) {
+        return new TroubleTicketSummary(summary.externalId(), summary.serviceId(), summary.description(),
+                toDto(summary.status()));
     }
 
     static Note toDto(pl.fradomski.troubleticket.domain.Note note) {
