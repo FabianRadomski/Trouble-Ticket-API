@@ -195,7 +195,12 @@ Statuses (from the spec): `new`, `acknowledged`, `inProgress`, `resolved`, `reje
   and comments after closing are useful (e.g. confirming a fix held).
 - The `note` field on create becomes the first element of `notes`.
 - Notes are returned in creation order (oldest first).
-- Adding a note never changes the ticket status.
+- Adding a note never changes the ticket status. It also leaves the ticket's `updatedAt` and version
+  untouched, so a note never causes an optimistic-lock conflict with a concurrent status change (or
+  another note).
+- `POST /troubleTicket/{id}/note` returns `201` with the note and **no `Location` header**: the spec
+  declares none and notes have no endpoint of their own.
+- A ticket of another tenant gives the same `404 TROUBLE_TICKET_NOT_FOUND` as a missing one (§1).
 
 ### 7. Identifiers
 
