@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: trouble-ticket-api
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/troubleticket}
+    username: ${DB_USERNAME:troubleticket}
+    password: ${DB_PASSWORD:troubleticket}
+  jpa:
+    open-in-view: false
+    hibernate:
+      # Hibernate never creates or changes the schema; how the schema is managed is decided
+      # together with the first ticket slice.
+      ddl-auto: none
+  jackson:
+    deserialization:
+      # Spec: additionalProperties: false -> unknown JSON fields are a 400 (README §8).
+      fail-on-unknown-properties: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
