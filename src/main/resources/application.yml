@@ -37,3 +37,15 @@ logging:
   pattern:
     # Request ID from RequestIdFilter (README §9) on every log line.
     correlation: "[%X{requestId:-}] "
+
+troubleticket:
+  soz:
+    # Create waits this long for SOZ, then answers 201 with status new (README §3).
+    register-timeout: 2s
+  # In-memory stand-in for the service inventory (README §2). Ids from the spec's examples.
+  service-catalog:
+    services:
+      - { id: 987654321, tenant-id: tenant-a }
+      - { id: 987654322, tenant-id: tenant-a }
+      - { id: 987654329, tenant-id: tenant-a, active: false }
+      - { id: 987654331, tenant-id: tenant-b }

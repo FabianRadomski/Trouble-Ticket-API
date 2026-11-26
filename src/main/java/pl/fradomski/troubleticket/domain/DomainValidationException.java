@@ -10,13 +10,20 @@ package pl.fradomski.troubleticket.domain;
 public class DomainValidationException extends RuntimeException {
 
     private final String field;
+    private final String problem;
 
     public DomainValidationException(String field, String problem) {
         super("Field '" + field + "' " + problem);
         this.field = field;
+        this.problem = problem;
     }
 
     public String field() {
         return field;
+    }
+
+    /** What is wrong, without the field name, e.g. {@code must not be blank}. */
+    public String problem() {
+        return problem;
     }
 }

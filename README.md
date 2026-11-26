@@ -85,8 +85,11 @@ and belongs to the caller's tenant. Services are treated as an **external system
 a service inventory) behind a port:
 
 - `ServiceCatalog.findActiveForTenant(tenantId, serviceId)` is an application-layer interface.
-- v1 ships an **in-memory stub adapter** with fixed seed data (a few services per tenant,
-  including an inactive one) for local runs and tests.
+- v1 ships an **in-memory stub adapter**. Its seed data is configuration
+  (`troubleticket.service-catalog.services` in `application.yml`), so local runs can add services
+  without a rebuild. Seeded: `987654321`, `987654322` (active) and `987654329` (inactive) for
+  `tenant-a`; `987654331` for `tenant-b`. Service ids are global, as in an inventory.
+  *Rejected:* a hard-coded map (a rebuild for every new test service).
 - Unknown, inactive **or belonging to another tenant** all return the same
   `404 SERVICE_NOT_FOUND`, so the API does not reveal whether a service exists in another tenant.
 - *Rejected:* a local `service` table with seed data. Simpler to query, but it suggests this service owns
@@ -113,6 +116,14 @@ a service inventory) behind a port:
       is not blocked by SOZ availability.
 3. v1 implements only this **immediate best-effort attempt**. It does **not** guarantee that SOZ eventually
    receives every ticket.
+4. The timeout is `troubleticket.soz.register-timeout` (default `2s`). The call runs on a virtual thread
+   so the request stops waiting at the timeout whatever the adapter does. A `PENDING` answer also leaves
+   the ticket `new`.
+5. The acknowledgement re-reads the ticket and applies `acknowledge()`, which changes nothing if the
+   ticket has moved on meanwhile (e.g. the client already closed it). The response then shows that
+   status. An optimistic-lock conflict is retried once; if it repeats, the `201` carries the ticket as
+   created. Any other failure of this step is a `500`, and the client's retry gets the saved ticket
+   through idempotency (§4).
 
 **Production target (documented, not built): transactional outbox as a safety net**
 - Save the ticket **and** an outbox row `REGISTER_TICKET` in the same transaction (atomic, no lost events).

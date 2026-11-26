@@ -24,6 +24,8 @@ import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import pl.fradomski.troubleticket.application.ServiceNotFoundException;
+import pl.fradomski.troubleticket.application.TroubleTicketNotFoundException;
 import pl.fradomski.troubleticket.domain.DomainValidationException;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.exc.StreamReadException;
@@ -69,6 +71,20 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(DomainValidationException.class)
     ResponseEntity<Object> handleDomainValidation(DomainValidationException ex) {
         return ApiErrors.response(HttpStatus.BAD_REQUEST, ErrorCode.VALIDATION_ERROR, ex.getMessage(), null);
+    }
+
+    /** Same response for unknown, inactive and other-tenant services (README §2). */
+    @ExceptionHandler(ServiceNotFoundException.class)
+    ResponseEntity<Object> handleServiceNotFound(ServiceNotFoundException ex) {
+        return ApiErrors.response(HttpStatus.NOT_FOUND, ErrorCode.SERVICE_NOT_FOUND,
+                "Service does not exist, is not active or is not available to the caller", null);
+    }
+
+    /** Same response for a missing ticket and another tenant's ticket (README §1). */
+    @ExceptionHandler(TroubleTicketNotFoundException.class)
+    ResponseEntity<Object> handleTroubleTicketNotFound(TroubleTicketNotFoundException ex) {
+        return ApiErrors.response(HttpStatus.NOT_FOUND, ErrorCode.TROUBLE_TICKET_NOT_FOUND,
+                "Trouble ticket does not exist or is not available to the caller", null);
     }
 
     @ExceptionHandler(Exception.class)
