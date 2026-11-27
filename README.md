@@ -344,7 +344,11 @@ Identifiers follow the format of the spec examples and come from PostgreSQL sequ
   idempotency index, and an unbounded key would fail inside PostgreSQL's index (a `500`) instead of
   as a clear client error. 255 leaves ample room for UUIDs and typical ticket numbers of client systems.
   *Rejected:* an unbounded `text` column (matches the contract literally, but very long keys break the index).
-- Whitespace and length rules live in the domain (`TroubleTicket`), which throws a validation exception
+- **The NUL character (`\u0000`) is rejected** in the same four fields (→ `400 VALIDATION_ERROR`).
+  PostgreSQL can't store it in a text column, so it would otherwise fail as a `500`. `externalId` is
+  checked before the idempotency lookup, since even querying with it fails. An encoded NUL in the
+  URL path (`%00`) never reaches the API: Tomcat rejects it with a bare `400`.
+- Whitespace, NUL and length rules live in the domain (`TroubleTicket`), which throws a validation exception
   rendered as the same `400 VALIDATION_ERROR` body as schema violations.
 - Error codes:
 

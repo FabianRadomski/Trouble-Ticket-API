@@ -113,6 +113,20 @@ class TroubleTicketTest {
                 "text", "Field 'text' must not be blank");
     }
 
+    /** PostgreSQL can't store U+0000 in a text column; without this check the insert fails with a 500. */
+    @ParameterizedTest
+    @ValueSource(strings = {"\u0000", "a\u0000", "\u0000b"})
+    void nulInClientTextIsRejected(String withNul) {
+        assertValidationError(() -> TroubleTicket.requireExternalId(withNul),
+                "externalId", "Field 'externalId' must not contain the NUL character");
+        assertValidationError(() -> new TroubleTicket("TT-2026-000001", "tenant-a", withNul, 7, "d", T0),
+                "externalId", "Field 'externalId' must not contain the NUL character");
+        assertValidationError(() -> new TroubleTicket("TT-2026-000001", "tenant-a", "EXT-1", 7, withNul, T0),
+                "description", "Field 'description' must not contain the NUL character");
+        assertValidationError(() -> ticket().addNote("NOTE-000001", withNul, T1),
+                "text", "Field 'text' must not contain the NUL character");
+    }
+
     @Test
     void externalIdMayHaveUpTo255Characters() {
         String max = "x".repeat(TroubleTicket.MAX_EXTERNAL_ID_LENGTH);

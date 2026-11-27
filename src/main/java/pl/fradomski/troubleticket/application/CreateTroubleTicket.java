@@ -86,6 +86,7 @@ public class CreateTroubleTicket {
     }
 
     public Result create(String tenantId, Command command) {
+        TroubleTicket.requireExternalId(command.externalId());
         var existing = repository.findByTenantIdAndExternalId(tenantId, command.externalId());
         if (existing.isPresent()) {
             return replay(existing.get(), command, true);

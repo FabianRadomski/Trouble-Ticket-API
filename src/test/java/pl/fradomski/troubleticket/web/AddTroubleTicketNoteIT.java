@@ -156,6 +156,7 @@ class AddTroubleTicketNoteIT {
             missing text  | {}                    | Field 'text' is required
             empty text    | {"text":""}           | Field 'text' must not be empty
             blank text    | {"text":"  "}         | Field 'text' must not be blank
+            NUL in text   | {"text":"a\\u0000"}   | Field 'text' must not contain the NUL character
             unknown field | {"text":"t","x":1}    | Unknown field 'x'
             wrong type    | {"text":["t"]}        | Field 'text' has an invalid value
             """)

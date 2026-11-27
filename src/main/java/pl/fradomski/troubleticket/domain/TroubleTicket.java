@@ -131,7 +131,11 @@ public class TroubleTicket {
         this.updatedAt = truncate(now);
     }
 
-    private static String requireExternalId(String externalId) {
+    /**
+     * Checks a client's {@code externalId} the way the constructor does. Create calls it before its
+     * idempotency lookup, so that a value the database can't take never reaches a query.
+     */
+    public static String requireExternalId(String externalId) {
         requireNotBlank(externalId, "externalId");
         // Count characters like PostgreSQL's varchar(n) does, not UTF-16 code units.
         if (externalId.codePointCount(0, externalId.length()) > MAX_EXTERNAL_ID_LENGTH) {
@@ -141,10 +145,16 @@ public class TroubleTicket {
         return externalId;
     }
 
-    /** Client input: whitespace-only is rejected, stricter than the contract (README §8). */
+    /**
+     * Client input: whitespace-only is rejected, stricter than the contract (README §8). So is
+     * U+0000, which PostgreSQL can't store in a text column.
+     */
     private static String requireNotBlank(String value, String field) {
         if (value == null || value.isBlank()) {
             throw new DomainValidationException(field, "must not be blank");
+        }
+        if (value.indexOf('\u0000') >= 0) {
+            throw new DomainValidationException(field, "must not contain the NUL character");
         }
         return value;
     }

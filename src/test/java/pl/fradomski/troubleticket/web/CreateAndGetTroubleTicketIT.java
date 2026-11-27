@@ -217,6 +217,9 @@ class CreateAndGetTroubleTicketIT {
             wrong type        | {"externalId":"%s","serviceId":true,"description":"d","status":"new","note":"n"}         | Field 'serviceId' has an invalid value
             blank description | {"externalId":"%s","serviceId":987654321,"description":"   ","status":"new","note":"n"}  | Field 'description' must not be blank
             blank note        | {"externalId":"%s","serviceId":987654321,"description":"d","status":"new","note":" "}     | Field 'note' must not be blank
+            NUL in externalId | {"externalId":"%s\\u0000","serviceId":987654321,"description":"d","status":"new","note":"n"} | Field 'externalId' must not contain the NUL character
+            NUL in descr.     | {"externalId":"%s","serviceId":987654321,"description":"a\\u0000b","status":"new","note":"n"} | Field 'description' must not contain the NUL character
+            NUL in note       | {"externalId":"%s","serviceId":987654321,"description":"d","status":"new","note":"\\u0000"}  | Field 'note' must not contain the NUL character
             """)
     void invalidCreateRequestIs400(String name, String body, String message) throws Exception {
         assertError(create(TENANT_A, body.formatted(externalId)), 400, "VALIDATION_ERROR", message);
@@ -245,6 +248,14 @@ class CreateAndGetTroubleTicketIT {
         assertError(otherTenant, 404, "TROUBLE_TICKET_NOT_FOUND", message);
         assertError(missing, 404, "TROUBLE_TICKET_NOT_FOUND", message);
         assertThat(otherTenant.headers().map().keySet()).isEqualTo(missing.headers().map().keySet());
+    }
+
+    /** Tomcat rejects an encoded NUL in the path itself, so it never reaches the database query. */
+    @Test
+    void nulInTheTicketIdIsNotAServerError() throws Exception {
+        var response = get("/api/v1/troubleTicket/TT-2026-000001%00", TENANT_A);
+
+        assertThat(response.statusCode()).isBetween(400, 499);
     }
 
     @Test
