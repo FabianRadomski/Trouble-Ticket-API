@@ -21,6 +21,9 @@ curl -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/troubleTicket
 `scripts/dev-keys.sh` must run before `docker compose up`: Compose mounts `.dev/jwt-public.pem`
 into the `api` container.
 
+CI (`.github/workflows/build.yml`) runs the same `./gradlew build` on every push to `main`, on tags
+and on pull requests. Docker on the `ubuntu-latest` runner serves Testcontainers.
+
 ## Assumptions and technical decisions
 
 The OpenAPI spec is the source of truth for the public contract. Where it is ambiguous or silent,
