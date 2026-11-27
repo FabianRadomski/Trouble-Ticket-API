@@ -21,6 +21,10 @@ curl -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/troubleTicket
 `scripts/dev-keys.sh` must run before `docker compose up`: Compose mounts `.dev/jwt-public.pem`
 into the `api` container.
 
+Swagger UI at <http://localhost:8081> shows the spec, and "Try it out" works: its nginx forwards
+`/api/` to the API (`docker/swagger-ui/default.conf.template`). Click **Authorize** and paste a token
+from `scripts/dev-token.sh`.
+
 CI (`.github/workflows/build.yml`) runs the same `./gradlew build` on every push to `main`, on tags
 and on pull requests. Docker on the `ubuntu-latest` runner serves Testcontainers.
 
@@ -76,8 +80,11 @@ checks JWTs locally.
 - Authentication and scope checks run before the request body is read: a missing token with an invalid
   body is `401`, not `400`.
 - The tenant reaches application code only through `CurrentTenant` (read from the verified token).
-- *Not configured:* CORS. Browser calls from another origin (e.g. Swagger UI "Try it out" on :8081)
-  are blocked; curl and server-to-server calls are not affected.
+- *Not configured:* CORS. The API serves no browser origin other than its own. Swagger UI does not
+  need it: Compose serves it with an `/api/` proxy to the API, so its calls are same-origin (see "Running").
+  *Rejected:* allowing `localhost:8081` via CORS. The spec's server URL is relative (`/api/v{version}`),
+  so Swagger UI sends "Try it out" to its own origin (:8081), not to :8080; CORS alone would not help, and
+  the spec is fixed.
 - Spring Security does not produce the spec's error body by default, so a custom
   `AuthenticationEntryPoint` and `AccessDeniedHandler` render `{code, message, requestId}` for 401/403.
 

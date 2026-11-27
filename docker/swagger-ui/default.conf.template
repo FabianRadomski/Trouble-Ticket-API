@@ -1,0 +1,61 @@
+# Copy of /etc/nginx/templates/default.conf.template from swaggerapi/swagger-ui:v5.17.14, plus the
+# /api/ location below. Re-copy it when the image version in docker-compose.yml changes.
+#
+# The spec's server URL is relative (/api/v{version}), so Swagger UI's "Try it out" sends requests to
+# this origin. Forwarding /api/ to the API keeps them same-origin: no CORS needed (README "Running").
+
+  types {
+    text/plain yaml;
+    text/plain yml;
+  }
+
+  gzip on;
+  gzip_static on;
+  gzip_disable "msie6";
+
+  gzip_vary on;
+  gzip_types text/plain text/css application/javascript;
+
+  map $request_method $access_control_max_age {
+    OPTIONS 1728000; # 20 days
+  }
+  server_tokens off; # Hide Nginx version
+
+  server {
+    listen            $PORT;
+    server_name       localhost;
+    index             index.html index.htm;
+
+    # RFC 9728 metadata the API links from WWW-Authenticate (README §1).
+    location = /.well-known/oauth-protected-resource {
+      proxy_pass       http://api:8080;
+      proxy_set_header Host $http_host;
+    }
+
+    location /api/ {
+      proxy_pass       http://api:8080;
+      # Keep the browser's host, so links the API builds (e.g. resource_metadata) point here.
+      proxy_set_header Host $http_host;
+    }
+
+    location $BASE_URL {
+      absolute_redirect off;
+      alias            /usr/share/nginx/html/;
+      expires 1d;
+
+      location ~ swagger-initializer.js {
+        expires -1;
+        include templates/cors.conf;
+      }
+
+      location ~* \.(?:json|yml|yaml)$ {
+        #SWAGGER_ROOT
+        expires -1;
+
+        include templates/cors.conf;
+      }
+
+      include templates/cors.conf;
+      include templates/embedding.conf;
+    }
+  }

@@ -39,12 +39,16 @@ services:
 
   swagger-ui:
     image: swaggerapi/swagger-ui:v5.17.14
+    depends_on:
+      - api
     ports:
       - "8081:8080"
     environment:
       SWAGGER_JSON: /spec/trouble-ticket-api.yaml
     volumes:
       - ./devtask:/spec:ro
+      # Adds a /api/ proxy to the API so "Try it out" works same-origin (see the file's header).
+      - ./docker/swagger-ui/default.conf.template:/etc/nginx/templates/default.conf.template:ro
 
 volumes:
   postgres-data:
