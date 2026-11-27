@@ -36,6 +36,8 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation("org.testcontainers:testcontainers-junit-jupiter")
     testImplementation("org.testcontainers:testcontainers-postgresql")
+    // Validates real HTTP exchanges against the spec in ContractIT (README §11).
+    testImplementation("com.atlassian.oai:openapi-request-validator-core:3.0.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 

@@ -295,8 +295,13 @@ have to parse one error shape:
   in the web configuration for the generated controllers only (actuator stays at `/actuator`).
 - Generated DTOs are a **web-layer concern only**. They are mapped to and from domain objects in the
   web layer and never reach the application or domain code.
-- The generator cannot check everything (e.g. that a response actually fills every required field),
-  so integration tests additionally validate real responses against the spec where feasible.
+- The generator cannot check everything (e.g. that a response actually fills every required field,
+  has no undeclared field, or uses only declared status codes). `ContractIT` therefore sends real HTTP
+  requests for every operation and every declared response (`200`/`201`/`400`/`401`/`403`/`404`) and
+  validates each exchange against the spec with Atlassian's `openapi-request-validator` (OpenAPI 3.1
+  support, test scope only). Requests that break the contract on purpose (for the `400`/`401` cases)
+  have only their response checked. A self-test feeds the validator a broken response, so a validator
+  that silently accepts everything would fail the build.
 - *Rejected:* hand-written DTOs plus a contract test. That means more code to keep in sync by hand, and drift
   is detected only by tests rather than by the compiler.
 
