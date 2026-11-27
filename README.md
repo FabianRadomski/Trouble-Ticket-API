@@ -8,25 +8,116 @@ Stack: Java 21, Spring Boot, PostgreSQL, Docker Compose.
 
 ## Running
 
-> Full instructions (example calls for every endpoint) land with the implementation. So far:
+**Prerequisites:** Docker with Compose, and `openssl` for the dev scripts. A JDK is needed only
+to build or test outside Docker (the Gradle toolchain uses Java 21).
 
 ```bash
-scripts/dev-keys.sh                     # once: RS256 keypair into .dev/ (gitignored); needs openssl
-docker compose up --build               # api :8080, postgres :5432, swagger-ui :8081
-TOKEN=$(scripts/dev-token.sh tenant-a "tt:read tt:write")   # 1h dev token
-curl -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/troubleTicket
-./gradlew build                         # tests need Docker (Testcontainers)
+scripts/dev-keys.sh          # once: RS256 keypair into .dev/ (gitignored)
+docker compose up --build    # api :8080, swagger-ui :8081, postgres :5432
 ```
 
 `scripts/dev-keys.sh` must run before `docker compose up`: Compose mounts `.dev/jwt-public.pem`
-into the `api` container.
+into the `api` container. `docker compose down -v` stops everything and deletes the database volume.
 
-Swagger UI at <http://localhost:8081> shows the spec, and "Try it out" works: its nginx forwards
-`/api/` to the API (`docker/swagger-ui/default.conf.template`). Click **Authorize** and paste a token
-from `scripts/dev-token.sh`.
+### Tokens
+
+`scripts/dev-token.sh <tenant_id> [scopes] [ttl_seconds]` mints a JWT signed with the dev key
+(default scopes `tt:read tt:write`, default lifetime 1 hour):
+
+```bash
+TOKEN=$(scripts/dev-token.sh tenant-a "tt:read tt:write")
+```
+
+The service catalog stub (§2) knows `tenant-a` (services `987654321`, `987654322`, and the inactive
+`987654329`) and `tenant-b` (`987654331`).
+
+### Example calls
+
+```bash
+AUTH="Authorization: Bearer $TOKEN"
+JSON="Content-Type: application/json"
+
+# Create: 201 with Location. Repeating the same request gives 200 with the same ticket (§4).
+curl -i -H "$AUTH" -H "$JSON" localhost:8080/api/v1/troubleTicket -d '{
+  "externalId": "CRM-12345", "serviceId": 987654321, "description": "No data transmission",
+  "status": "new", "note": "Modem LED blinks red"}'
+# HTTP/1.1 201
+# Location: /api/v1/troubleTicket/TT-2026-000001
+# {"id":"TT-2026-000001","externalId":"CRM-12345","serviceId":987654321,
+#  "description":"No data transmission","status":"acknowledged",
+#  "notes":[{"id":"NOTE-000001","text":"Modem LED blinks red","date":"2026-11-27T10:40:37.903991Z"}]}
+
+# List the tenant's tickets, oldest first (§10)
+curl -H "$AUTH" localhost:8080/api/v1/troubleTicket
+# [{"externalId":"CRM-12345","serviceId":987654321,"description":"No data transmission","status":"acknowledged"}]
+
+# Get one ticket
+curl -H "$AUTH" localhost:8080/api/v1/troubleTicket/TT-2026-000001
+
+# Add a note: 201 with the note (§6)
+curl -H "$AUTH" -H "$JSON" localhost:8080/api/v1/troubleTicket/TT-2026-000001/note \
+  -d '{"text": "Still down after restart"}'
+# {"id":"NOTE-000002","text":"Still down after restart","date":"2026-11-27T10:40:38.457064Z"}
+
+# Close: 200 with the ticket; closing again is also 200 (§5)
+curl -X PATCH -H "$AUTH" -H "$JSON" localhost:8080/api/v1/troubleTicket/TT-2026-000001 \
+  -d '{"status": "closed"}'
+```
+
+Errors share one body, e.g. another tenant's ticket:
+
+```bash
+curl -H "Authorization: Bearer $(scripts/dev-token.sh tenant-b)" \
+  localhost:8080/api/v1/troubleTicket/TT-2026-000001
+# {"code":"TROUBLE_TICKET_NOT_FOUND","message":"Trouble ticket does not exist or is not available to the caller",
+#  "requestId":"91ae5fa1-35de-44c9-9e4d-117daab20883"}
+```
+
+Health (no token): `curl localhost:8080/actuator/health`.
+
+### Swagger UI
+
+<http://localhost:8081> shows the spec, and "Try it out" works: its nginx forwards `/api/` to the
+API (`docker/swagger-ui/default.conf.template`, see §1). Click **Authorize** and paste a token from
+`scripts/dev-token.sh`.
+
+### Tests and CI
+
+```bash
+./gradlew build    # compiles against the generated contract, runs all tests; needs Docker (Testcontainers)
+```
+
+Integration tests run the full application over real HTTP against PostgreSQL in Testcontainers and
+sign their own JWTs with an in-memory key. `ContractIT` checks real exchanges against the spec (§11).
 
 CI (`.github/workflows/build.yml`) runs the same `./gradlew build` on every push to `main`, on tags
 and on pull requests. Docker on the `ubuntu-latest` runner serves Testcontainers.
+
+## Project structure
+
+```
+devtask/                    spec (fixed input) and assignment
+src/main/java/pl/fradomski/troubleticket/
+├── domain/                 TroubleTicket, Note (JPA entities with the status rules), TicketStatus
+├── application/            use cases (Create/Get/List/Close TroubleTicket, AddTroubleTicketNote)
+│                           and ports: ServiceCatalog, SozGateway, IdGenerator
+├── infrastructure/
+│   ├── persistence/        tenant-scoped repository, sequence-based IdGenerator
+│   ├── catalog/            in-memory ServiceCatalog stub (seed from application.yml)
+│   └── soz/                fake SozGateway
+└── web/                    controllers implementing the generated interfaces, DTO mapper,
+    ├── error/              /api/v1 prefix, request ID filter; uniform Error responses
+    └── security/           JWT resource server, scopes, tenant from the token
+src/main/resources/db/migration/   Flyway schema
+build/generated/openapi/    API interfaces + DTOs generated from the spec on every build (not committed)
+scripts/                    dev keypair and token scripts
+docker/swagger-ui/          nginx config with the /api/ proxy for Swagger UI
+```
+
+`web` → `application` → `domain`; `domain` depends on nothing else. `infrastructure` implements the
+application ports for external systems (catalog, SOZ, IDs). The use cases call the Spring Data
+repository directly, with no port of its own, in line with the pragmatic JPA choice (§12).
+Generated DTOs never leave `web`.
 
 ## Assumptions and technical decisions
 
@@ -341,5 +432,23 @@ have to parse one error shape:
 
 - The assignment refers to `devtask/trouble-ticket-api.yaml`. The specification lives in `devtask/`
   accordingly.
-- Out of scope (v1): inbound status updates from SOZ, ticket deletion, note editing, paging,
-  and an outbox worker (see §3).
+- Out of scope (v1): ticket deletion and note editing. Other gaps are listed under
+  [Known limitations and next steps](#known-limitations-and-next-steps).
+
+## Known limitations and next steps
+
+- **SOZ delivery is best-effort** (§3, §5). If SOZ is down at create time, the ticket stays `new`
+  until the client replays the create, and a failed close notification is not retried.
+  Next: a transactional outbox with a background worker.
+- **No inbound SOZ status updates.** Nothing moves a ticket to `inProgress`, `resolved` or
+  `rejected` yet. Next: an inbound endpoint or message consumer for SOZ, with its own credentials.
+- **No paging or filtering on the list** (§10). Next: `offset` / `limit` with `X-Total-Count`,
+  and filtering by `status`.
+- **Stub adapters.** `ServiceCatalog` and `SozGateway` are in-process fakes. Next: real adapters for
+  the service inventory and SOZ (timeouts, retries, circuit breaker).
+- **No upstream request ID correlation** (§9). Next: honour a well-formed incoming `X-Request-Id`
+  and pass it on to SOZ calls.
+- **No rate limiting** per tenant or per client. Next: at the API gateway, or in the service if
+  there is none.
+- **Dev-only keys.** Tokens come from a local keypair. Next: point `jwk-set-uri` at the real
+  identity provider (§1).
