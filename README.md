@@ -331,6 +331,10 @@ Identifiers follow the format of the spec examples and come from PostgreSQL sequ
 - `additionalProperties: false` is enforced: unknown JSON fields → `400 VALIDATION_ERROR`
   (Jackson `FAIL_ON_UNKNOWN_PROPERTIES`). Bean Validation enforces required fields, `minLength`
   and `minimum`.
+- **JSON types are enforced exactly.** Jackson's default scalar conversions are turned off
+  (`StrictJsonConfig`), so `"serviceId": 1.9`, `1.0`, `"5"` or `true` and a number or boolean
+  where a string is expected → `400 VALIDATION_ERROR`. Otherwise `1.9` would quietly become `1` and
+  `true` would become `"true"`.
 - **Whitespace-only strings are rejected** (`"   "` → `400 VALIDATION_ERROR`) for `externalId`,
   `description`, `note` and note `text`. This is **stricter than the contract**: `minLength: 1` alone
   accepts them, but a blank description, note or external key carries no meaning and would only

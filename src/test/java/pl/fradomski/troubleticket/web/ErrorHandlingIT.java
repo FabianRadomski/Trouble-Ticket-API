@@ -62,6 +62,15 @@ class ErrorHandlingIT {
             unknown field      | {"externalId":"OK-1","serviceId":1,"description":"d","status":"new","note":"n","foo":1} | Unknown field 'foo'
             disallowed status  | {"externalId":"OK-1","serviceId":1,"description":"d","status":"closed","note":"n"} | Field 'status' has an invalid value
             wrong type         | {"externalId":"OK-1","serviceId":"abc","description":"d","status":"new","note":"n"} | Field 'serviceId' has an invalid value
+            numeric string id  | {"externalId":"OK-1","serviceId":"5","description":"d","status":"new","note":"n"}   | Field 'serviceId' has an invalid value
+            fractional id      | {"externalId":"OK-1","serviceId":1.9,"description":"d","status":"new","note":"n"}   | Field 'serviceId' has an invalid value
+            whole float id     | {"externalId":"OK-1","serviceId":1.0,"description":"d","status":"new","note":"n"}   | Field 'serviceId' has an invalid value
+            boolean id         | {"externalId":"OK-1","serviceId":true,"description":"d","status":"new","note":"n"}  | Field 'serviceId' has an invalid value
+            empty string id    | {"externalId":"OK-1","serviceId":"","description":"d","status":"new","note":"n"}    | Field 'serviceId' has an invalid value
+            number as text     | {"externalId":42,"serviceId":1,"description":"d","status":"new","note":"n"}         | Field 'externalId' has an invalid value
+            float as text      | {"externalId":"OK-1","serviceId":1,"description":1.5,"status":"new","note":"n"}     | Field 'description' has an invalid value
+            boolean as text    | {"externalId":"OK-1","serviceId":1,"description":"d","status":"new","note":true}    | Field 'note' has an invalid value
+            number as status   | {"externalId":"OK-1","serviceId":1,"description":"d","status":0,"note":"n"}         | Field 'status' has an invalid value
             missing field      | {"serviceId":1,"description":"d","status":"new","note":"n"}                       | Field 'externalId' is required
             empty string       | {"externalId":"OK-1","serviceId":1,"description":"","status":"new","note":"n"}    | Field 'description' must not be empty
             below minimum      | {"externalId":"OK-1","serviceId":0,"description":"d","status":"new","note":"n"}   | Field 'serviceId' is below the allowed minimum
