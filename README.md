@@ -145,7 +145,7 @@ a service inventory) behind a port:
   external call, a SOZ outage blocks all creates, and a timeout after SOZ accepted leaves SOZ with
   a ticket we rolled back.
 - Closing a ticket should also notify SOZ eventually. In v1 this is a no-op method on the same port
-  (`notifyClosed`).
+  (`notifyClosed`), called best-effort after the close commits (§5).
 
 ### 4. Idempotency of create
 
@@ -188,6 +188,14 @@ Statuses (from the spec): `new`, `acknowledged`, `inProgress`, `resolved`, `reje
 - A PATCH body with any status other than `closed` is rejected by schema validation →
   `400 VALIDATION_ERROR`. So no state-based 400 exists on this endpoint.
 - *Rejected:* allowing close only from `resolved` / `rejected`, because the client could not withdraw a ticket opened by mistake.
+- The close commits in its own transaction. A concurrent status change (e.g. the SOZ acknowledgement
+  of §3) fails it on the ticket's version. It is re-read and retried once, which succeeds because
+  closing is allowed from every status. If it conflicts again, the error propagates (`500`), and the
+  client's retry is safe.
+- After the commit, and only if this request actually closed the ticket, SOZ is told
+  (`notifyClosed`, a no-op in v1). A repeated close does not notify SOZ again. A failed notification is
+  logged and the response is still `200 closed`. Guaranteed delivery would need the outbox of §3.
+- A ticket of another tenant gives the same `404 TROUBLE_TICKET_NOT_FOUND` as a missing one (§1).
 
 ### 6. Notes
 

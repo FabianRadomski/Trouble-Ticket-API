@@ -5,12 +5,12 @@ import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 import pl.fradomski.troubleticket.api.TroubleTicketApi;
 import pl.fradomski.troubleticket.api.model.TroubleTicket;
 import pl.fradomski.troubleticket.api.model.TroubleTicketCloseStatusRequest;
 import pl.fradomski.troubleticket.api.model.TroubleTicketCreateRequest;
 import pl.fradomski.troubleticket.api.model.TroubleTicketSummary;
+import pl.fradomski.troubleticket.application.CloseTroubleTicket;
 import pl.fradomski.troubleticket.application.CreateTroubleTicket;
 import pl.fradomski.troubleticket.application.GetTroubleTicket;
 import pl.fradomski.troubleticket.application.ListTroubleTickets;
@@ -27,13 +27,16 @@ class TroubleTicketController implements TroubleTicketApi {
     private final CreateTroubleTicket createTroubleTicket;
     private final GetTroubleTicket getTroubleTicket;
     private final ListTroubleTickets listTroubleTickets;
+    private final CloseTroubleTicket closeTroubleTicket;
 
     TroubleTicketController(CurrentTenant currentTenant, CreateTroubleTicket createTroubleTicket,
-            GetTroubleTicket getTroubleTicket, ListTroubleTickets listTroubleTickets) {
+            GetTroubleTicket getTroubleTicket, ListTroubleTickets listTroubleTickets,
+            CloseTroubleTicket closeTroubleTicket) {
         this.currentTenant = currentTenant;
         this.createTroubleTicket = createTroubleTicket;
         this.getTroubleTicket = getTroubleTicket;
         this.listTroubleTickets = listTroubleTickets;
+        this.closeTroubleTicket = closeTroubleTicket;
     }
 
     @Override
@@ -58,9 +61,13 @@ class TroubleTicketController implements TroubleTicketApi {
                 .toList());
     }
 
+    /**
+     * The request's only possible content is {@code {"status":"closed"}}: any other status fails
+     * while parsing the body (400), so the request itself carries no further information (README §5).
+     */
     @Override
     public ResponseEntity<TroubleTicket> closeTroubleTicket(String id, TroubleTicketCloseStatusRequest request) {
-        throw new ResponseStatusException(HttpStatus.NOT_IMPLEMENTED); // later slice
+        return ResponseEntity.ok(TroubleTicketMapper.toDto(closeTroubleTicket.close(currentTenant.id(), id)));
     }
 
     /** Relative, as the spec types {@code Location} as {@code uri-reference} (README §4). */
